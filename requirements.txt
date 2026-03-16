@@ -1,0 +1,28 @@
+# requirements.txt
+# Install with: pip install -r requirements.txt
+
+# Core data
+pandas>=2.0
+pyreadstat          # reads .dta Stata files
+pyarrow             # parquet read/write
+fastparquet         # alternative parquet engine
+
+# HTTP / S3 (no AWS account needed for public buckets)
+requests           # optional, only if you want to use aws s3 sync
+
+# ML (for step 07 — model training)
+scikit-learn
+xgboost
+imbalanced-learn    # SMOTE for class balancing
+
+# NLP / LegalBERT (for step 07 — text classifier)
+transformers
+torch
+sentence-transformers
+
+# Gemini API (for step 05 — LLM labeling)
+google-generativeai
+
+# Utilities
+tqdm
+numpy
