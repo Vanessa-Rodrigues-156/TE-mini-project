@@ -32,7 +32,7 @@ import os
 from pathlib import Path
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
-DDL_ROOT = Path("ddl_data")          # ← change to your actual path
+DDL_ROOT = Path("dta")          # ← change to your actual path
 OUTPUT_DIR = Path("compiled_dataset")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
@@ -55,24 +55,24 @@ def load_keys():
     keys = {}
 
     # act_key: act (int) → act_s (string name of act)
-    keys["act"] = read_dta(DDL_ROOT / "keys" / "act_key.dta")
+    keys["act"] = read_dta(DDL_ROOT / "keys" / "keys" / "act_key.dta")
 
     # section_key: section (int) → section_s (string name of section)
-    keys["section"] = read_dta(DDL_ROOT / "keys" / "section_key.dta")
+    keys["section"] = read_dta(DDL_ROOT / "keys" / "keys" / "section_key.dta")
 
     # disp_name_key: disp_name + year → disp_name_s (disposition string)
-    keys["disp_name"] = read_dta(DDL_ROOT / "keys" / "disp_name_key.dta")
+    keys["disp_name"] = read_dta(DDL_ROOT / "keys" / "keys" / "disp_name_key.dta")
 
     # type_name_key: type_name + year → type_name_s (case type string)
-    keys["type_name"] = read_dta(DDL_ROOT / "keys" / "type_name_key.dta")
+    keys["type_name"] = read_dta(DDL_ROOT / "keys" / "keys" / "type_name_key.dta")
 
     # purpose_name_key: purpose_name + year → purpose_name_s
-    keys["purpose_name"] = read_dta(DDL_ROOT / "keys" / "purpose_name_key.dta")
+    keys["purpose_name"] = read_dta(DDL_ROOT / "keys" / "keys" / "purpose_name_key.dta")
 
     # state / district / court name keys
-    keys["state"] = read_dta(DDL_ROOT / "keys" / "cases_state_key.dta")
-    keys["district"] = read_dta(DDL_ROOT / "keys" / "cases_district_key.dta")
-    keys["court"] = read_dta(DDL_ROOT / "keys" / "cases_court_key.dta")
+    keys["state"] = read_dta(DDL_ROOT / "keys" / "keys" / "cases_state_key.dta")
+    keys["district"] = read_dta(DDL_ROOT / "keys" / "keys" / "cases_district_key.dta")
+    keys["court"] = read_dta(DDL_ROOT / "keys" / "keys" / "cases_court_key.dta")
 
     return keys
 
@@ -91,7 +91,7 @@ def load_acts_sections():
 # ── STEP 1C: Load and merge one year of case data ────────────────────────────
 def load_year(year: int, acts_df: pd.DataFrame, keys: dict) -> pd.DataFrame:
     print(f"\n  Loading cases_{year}.dta ...")
-    df = read_dta(DDL_ROOT / "cases" / f"cases_{year}.dta")
+    df = read_dta(DDL_ROOT / "cases" / "cases" / f"cases_{year}.dta")
     if df.empty:
         return df
 
