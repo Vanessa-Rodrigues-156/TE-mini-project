@@ -6,7 +6,7 @@ Format: .dta (Stata) files, one per year (2010-2018)
 Coverage: ~81 million cases, India's District & Sessions Courts
 
 Folder structure expected (from your Dropbox download):
-    ddl_data/
+    dta/
         cases/
             cases_2010.dta
             cases_2011.dta
@@ -23,11 +23,13 @@ Folder structure expected (from your Dropbox download):
             cases_district_key.dta
             cases_court_key.dta
 
-Output: ddl_processed.parquet  (cleaned, merged, label-ready)
+Output: ddl_processed_{year}.parquet per year (cleaned, merged, label-ready)
+       Optimized for low RAM (12GB) — processes one year at a time
 """
 
 import pandas as pd
 import pyreadstat
+import gc  # for memory management
 import os
 from pathlib import Path
 
@@ -38,7 +40,8 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 # Which years to load. Start with 2015-2018 to keep it manageable (~30M rows).
 # Once pipeline works, expand to 2010-2018.
-YEARS = [2015, 2016, 2017, 2018]
+# NOTE: For 12GB RAM laptops, process ONE year at a time to avoid crashes
+YEARS = [2015]  # Change this to [2016], [2017], etc. for other years
 
 # ── HELPER: read a .dta file into a pandas DataFrame ─────────────────────────
 def read_dta(path: Path) -> pd.DataFrame:
@@ -186,44 +189,60 @@ def main():
     print(f"    Acts/sections rows: {len(acts_df):,}")
 
     all_years = []
-    print("\n[3] Loading case files by year ...")
+    print("\n[3] Loading and processing case files by year (batch processing) ...")
     for year in YEARS:
+        print(f"\n  Processing {year} ...")
         df = load_year(year, acts_df, keys)
-        if not df.empty:
-            df = select_columns(df)
-            all_years.append(df)
+        if df.empty:
+            continue
 
-    print("\n[4] Concatenating all years ...")
-    combined = pd.concat(all_years, ignore_index=True)
-    print(f"    Total rows: {len(combined):,}")
-    print(f"    Columns: {list(combined.columns)}")
+        df = select_columns(df)
 
-    print("\n[5] Basic cleanup ...")
-    # Standardise string columns: strip whitespace, lowercase
-    str_cols = combined.select_dtypes("object").columns
-    for col in str_cols:
-        combined[col] = combined[col].str.strip()
+        # Basic cleanup for this year (skip lowercase to save memory)
+        str_cols = df.select_dtypes("object").columns
+        for col in str_cols:
+            df[col] = df[col].str.strip()  # Skip .str.lower() to reduce memory usage
 
-    # Parse dates
-    for datecol in ["date_of_filing", "date_of_decision"]:
-        if datecol in combined.columns:
-            combined[datecol] = pd.to_datetime(combined[datecol], errors="coerce")
+        # Parse dates
+        for datecol in ["date_of_filing", "date_of_decision"]:
+            if datecol in df.columns:
+                df[datecol] = pd.to_datetime(df[datecol], errors="coerce")
 
-    print("\n[6] Saving to parquet ...")
-    out_path = OUTPUT_DIR / "ddl_processed.parquet"
-    combined.to_parquet(out_path, index=False)
-    print(f"    Saved → {out_path}")
-    print(f"    File size: {out_path.stat().st_size / 1e6:.1f} MB")
+        # Memory optimization: convert low-cardinality object columns to category
+        for col in str_cols:
+            if df[col].nunique() / len(df) < 0.1:  # less than 10% unique
+                df[col] = df[col].astype("category")
 
-    # Quick summary
-    print("\n── Summary ──────────────────────────────────────────")
-    if "criminal" in combined.columns:
-        print(combined["criminal"].value_counts().rename({0: "Civil", 1: "Criminal"}))
-    if "act_s" in combined.columns:
-        print("\nTop 20 Acts:")
-        print(combined["act_s"].value_counts().head(20))
+        # Print memory usage
+        mem_usage = df.memory_usage(deep=True).sum() / 1e9  # GB
+        print(f"    Memory usage: {mem_usage:.2f} GB")
 
-    print("\nDone ✓")
+        # Save each year separately to avoid memory issues
+        out_path = OUTPUT_DIR / f"ddl_processed_{year}.parquet"
+        df.to_parquet(out_path, index=False)
+        print(f"    Saved {year} → {out_path} ({len(df):,} rows, {out_path.stat().st_size / 1e6:.1f} MB)")
+
+        # Clear memory
+        del df
+        gc.collect()
+
+    print("\n[4] All years processed individually.")
+    print("To combine later, use: pd.concat([pd.read_parquet(f'ddl_processed_{y}.parquet') for y in YEARS])")
+
+    # Quick summary (load one file for example)
+    example_year = YEARS[0]
+    example_path = OUTPUT_DIR / f"ddl_processed_{example_year}.parquet"
+    if example_path.exists():
+        df_sample = pd.read_parquet(example_path)
+        print("\n── Sample Summary (from {example_year}) ──────────────────────────────────────────")
+        if "criminal" in df_sample.columns:
+            print(df_sample["criminal"].value_counts().rename({0: "Civil", 1: "Criminal"}))
+        if "act_s" in df_sample.columns:
+            print("\nTop 10 Acts:")
+            print(df_sample["act_s"].value_counts().head(10))
+        del df_sample
+
+    print("\nDone ✓ (Batch processed to avoid memory issues)")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,8 @@
+# Core data processing
+pandas>=2.0
+pyreadstat          # reads .dta Stata files
+pyarrow             # parquet read/write (used by pandas)
+
+# Utilities
+tqdm                # progress bars (optional but useful)
+numpy               # numerical operations
