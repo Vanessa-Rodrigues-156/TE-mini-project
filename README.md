@@ -50,9 +50,9 @@ ddl_data/
         cases_court_key.dta
 ```
 
-### 3. Set your Anthropic API key (for step 05 only)
+### 3. Set your Gemini API key (for step 05 only)
 ```bash
-export ANTHROPIC_API_KEY=your_key_here
+export GEMINI_API_KEY=your_key_here
 ```
 
 ---
@@ -73,7 +73,7 @@ python 03_fetch_supreme_court.py
 python 04_label_adr.py
 # Produces: training_data.parquet + needs_llm_labeling.parquet
 
-# Step 5 (OPTIONAL): Use Claude API to label unlabeled/ambiguous cases
+# Step 5 (OPTIONAL): Use GEMINI API to label unlabeled/ambiguous cases
 python 05_llm_label.py
 
 # Step 6: Explore and validate the dataset
