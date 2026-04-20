@@ -78,6 +78,11 @@ python 05_llm_label.py
 
 # Step 6: Explore and validate the dataset
 python 06_explore_dataset.py
+
+# Step 7: Train structured model (Random Forest / XGBoost)
+# Run as notebook: jupyter notebook 07_train_structured_model.ipynb
+# Or as script: python 07_train_structured_model.py
+# Produces: best_model.pkl + metadata.pkl (in compiled_dataset/models/)
 ```
 
 ---
@@ -92,6 +97,8 @@ python 06_explore_dataset.py
 | `training_data.parquet` | **Main training dataset** — labeled, all sources |
 | `needs_llm_labeling.parquet` | Cases with ambiguous/unknown labels |
 | `llm_labeled_sample.parquet` | LLM-labeled sample (if step 05 was run) |
+| `models/best_model.pkl` | **Trained classification model** (Step 7) |
+| `models/metadata.pkl` | Model metadata: encoders, features, metrics (Step 7) |
 
 ---
 
@@ -103,6 +110,35 @@ python 06_explore_dataset.py
 | 1 | ADR suitable (arbitration / mediation / conciliation / Lok Adalat) |
 | 2 | ADR + ODR suitable (can be resolved online) |
 | -1 | Unknown / needs manual or LLM review |
+
+Additional target columns kept in the dataset:
+- `adr_target` (binary: -1/0/1)
+- `odr_target` (binary: -1/0/1)
+
+`final_label` is still provided for convenience as a multiclass target,
+but `adr_target` and `odr_target` let you train independent models.
+
+---
+
+## HC/SC Text Labeling Notes
+
+High Court and Supreme Court text labels are intentionally conservative:
+- Keyword matches are boundary-aware (to reduce substring false positives)
+- Negated contexts (for example, "arbitration rejected") are marked ambiguous
+- Mixed ADR and non-ADR signals are marked ambiguous
+
+Ambiguous cases are assigned `-1` and routed to `needs_llm_labeling.parquet`
+for step 05.
+
+---
+
+## Data Validation Checks
+
+After schema standardization, the pipeline validates:
+- Required unified columns are present
+- Label ranges are valid (`final_label` in `{-1,0,1,2}`; binary labels in `{-1,0,1}`)
+- `case_id` is unique within each `source`
+- Label consistency (`final_label=2` implies `odr_label=1`, etc.)
 
 ---
 
@@ -130,7 +166,9 @@ python 06_explore_dataset.py
 ---
 
 ## Next Step
-After exploring the dataset, proceed to model training:
-- **Structured model**: Random Forest / XGBoost on act_name + case_type features
-- **Text model**: Fine-tune LegalBERT on title + description text
-- **Combined**: Ensemble of both for best accuracy
+After training the structured model (Step 7), proceed to:
+1. **Text-based model**: Fine-tune LegalBERT on case descriptions (Step 8)
+2. **Ensemble**: Combine structured + text models for best accuracy (Step 9)
+3. **Deployment**: Create API for real-time predictions (Step 10)
+
+For detailed instructions on model training, see: `STEP_07_MODEL_TRAINING.md`

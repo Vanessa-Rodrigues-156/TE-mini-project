@@ -78,15 +78,28 @@ def label_case_with_llm(row: pd.Series) -> dict:
         return {
             "adr_label": 1 if result.get("adr_suitable") else 0,
             "odr_label": 1 if result.get("odr_suitable") else 0,
+            "adr_target": 1 if result.get("adr_suitable") else 0,
+            "odr_target": 1 if result.get("odr_suitable") else 0,
             "final_label": 2 if result.get("odr_suitable") else (1 if result.get("adr_suitable") else 0),
             "label_reason": f"LLM ({result.get('confidence', '?')}): {result.get('reasoning', '')}",
             "llm_confidence": result.get("confidence", "unknown"),
         }
     except Exception as e:
         return {
-            "adr_label": -1, "odr_label": -1, "final_label": -1,
+            "adr_label": -1, "odr_label": -1, "adr_target": -1, "odr_target": -1, "final_label": -1,
             "label_reason": f"LLM error: {e}", "llm_confidence": "error"
         }
+
+
+def validate_llm_labels(df: pd.DataFrame) -> None:
+    allowed = {-1, 0, 1, 2}
+    vals = set(df["final_label"].dropna().astype(int).unique().tolist())
+    assert vals.issubset(allowed), f"Invalid final_label values from LLM: {sorted(vals - allowed)}"
+
+    allowed_bin = {-1, 0, 1}
+    for col in ["adr_label", "odr_label", "adr_target", "odr_target"]:
+        vals = set(df[col].dropna().astype(int).unique().tolist())
+        assert vals.issubset(allowed_bin), f"Invalid {col} values from LLM: {sorted(vals - allowed_bin)}"
 
 
 def main():
@@ -120,10 +133,11 @@ def main():
 
     results_df = pd.DataFrame(results, index=sample.index)
     # Update the sample with LLM labels
-    for col in ["adr_label", "odr_label", "final_label", "label_reason", "llm_confidence"]:
+    for col in ["adr_label", "odr_label", "adr_target", "odr_target", "final_label", "label_reason", "llm_confidence"]:
         sample[col] = results_df[col]
 
     sample = sample[sample["final_label"] != -1]  # drop LLM errors
+    validate_llm_labels(sample)
 
     out_path = OUTPUT_DIR / "llm_labeled_sample.parquet"
     sample.to_parquet(out_path, index=False)

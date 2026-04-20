@@ -58,6 +58,14 @@ def explore(path: Path, name: str):
         for label, count in counts.items():
             print(f"  {label:<35} {count:>8,}  ({count/total*100:.1f}%)")
 
+    if "adr_target" in df.columns:
+        print("\nADR target distribution:")
+        print(df["adr_target"].value_counts(dropna=False).to_string())
+
+    if "odr_target" in df.columns:
+        print("\nODR target distribution:")
+        print(df["odr_target"].value_counts(dropna=False).to_string())
+
     if "source" in df.columns:
         print(f"\nSource distribution:")
         print(df["source"].value_counts().to_string())

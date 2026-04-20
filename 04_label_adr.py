@@ -30,6 +30,7 @@ Output:
 """
 
 import pandas as pd
+import re
 from pathlib import Path
 
 OUTPUT_DIR = Path("compiled_dataset")
@@ -124,6 +125,13 @@ ODR_POSITIVE_KEYWORDS = [
     "motor accident", "consumer complaint", "insurance claim",
 ]
 
+NEGATION_TERMS = [
+    "no", "not", "without", "reject", "rejected", "rejects", "rejecting",
+    "deny", "denied", "denies", "denying", "decline", "declined",
+    "declines", "declining", "refuse", "refused", "refuses", "refusing",
+    "inapplicable", "barred", "impermissible",
+]
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # LABELING FUNCTIONS
@@ -171,30 +179,45 @@ def label_from_text(title: str = None, description: str = None) -> tuple:
     if not text.strip():
         return (-1, -1, "No text available")
 
-    # Hard negative — non-ADR keywords trump everything
-    for kw in NON_ADR_KEYWORDS:
-        if kw in text:
-            return (0, 0, f"Non-ADR keyword found: '{kw}'")
+    def keyword_in_text(keyword: str) -> bool:
+        # Use boundary-aware matching so short tokens (e.g. ADR/ODR) don't
+        # trigger on unrelated substrings.
+        pattern = r"(?<!\\w)" + re.escape(keyword).replace(r"\\ ", r"\\s+") + r"(?!\\w)"
+        return re.search(pattern, text) is not None
 
-    # Positive ADR signal
-    adr = 0
-    odr = 0
-    reasons = []
+    def negated_keyword(keyword: str) -> bool:
+        key = re.escape(keyword).replace(r"\\ ", r"\\s+")
+        neg = r"(?:" + "|".join(re.escape(t) for t in NEGATION_TERMS) + r")"
+        # Negation before keyword, allowing a short token gap.
+        before = rf"{neg}(?:\\W+\\w+){{0,4}}\\W+{key}"
+        # Negation shortly after keyword.
+        after = rf"{key}(?:\\W+\\w+){{0,4}}\\W+{neg}"
+        return re.search(before, text) is not None or re.search(after, text) is not None
 
-    for kw in ADR_POSITIVE_KEYWORDS:
-        if kw in text:
-            adr = 1
-            reasons.append(f"ADR keyword: '{kw}'")
-            break
+    negative_hits = [kw for kw in NON_ADR_KEYWORDS if keyword_in_text(kw)]
+    adr_hits = [kw for kw in ADR_POSITIVE_KEYWORDS if keyword_in_text(kw)]
+    odr_hits = [kw for kw in ODR_POSITIVE_KEYWORDS if keyword_in_text(kw)]
+    negated_adr_hits = [kw for kw in adr_hits if negated_keyword(kw)]
+    negated_odr_hits = [kw for kw in odr_hits if negated_keyword(kw)]
 
-    for kw in ODR_POSITIVE_KEYWORDS:
-        if kw in text:
-            odr = 1
-            reasons.append(f"ODR keyword: '{kw}'")
-            break
-
-    if adr == 0 and odr == 0:
+    # Conservative default for ambiguous HC/SC text: leave for LLM labeling.
+    if negative_hits and (adr_hits or odr_hits):
+        return (-1, -1, "Ambiguous text: mixed ADR and non-ADR signals")
+    if negated_adr_hits or negated_odr_hits:
+        return (-1, -1, "Ambiguous text: ADR/ODR terms appear in negated context")
+    if negative_hits:
+        return (0, 0, f"Non-ADR keyword found: '{negative_hits[0]}'")
+    if not adr_hits and not odr_hits:
         return (-1, -1, "No ADR/ODR signal in text")
+
+    # ODR implies ADR by definition.
+    adr = 1 if (adr_hits or odr_hits) else 0
+    odr = 1 if odr_hits else 0
+    reasons = []
+    if adr_hits:
+        reasons.append(f"ADR keyword: '{adr_hits[0]}'")
+    if odr_hits:
+        reasons.append(f"ODR keyword: '{odr_hits[0]}'")
 
     return (adr, odr, "; ".join(reasons))
 
@@ -276,6 +299,8 @@ UNIFIED_COLS = [
     "state",
     "adr_label",
     "odr_label",
+    "adr_target",        # binary target preserved for independent ADR modeling
+    "odr_target",        # binary target preserved for independent ODR modeling
     "final_label",       # 0=no, 1=ADR only, 2=ADR+ODR, -1=unknown
     "label_reason",
 ]
@@ -320,7 +345,53 @@ def standardise(df: pd.DataFrame, court_level: str) -> pd.DataFrame:
     for col in ["adr_label", "odr_label", "final_label", "label_reason"]:
         out[col] = df[col]
 
+    # Preserve independent supervised targets in addition to final multiclass label.
+    out["adr_target"] = out["adr_label"]
+    out["odr_target"] = out["odr_label"]
+
+    # Ensure the unified schema is complete and ordered.
+    for col in UNIFIED_COLS:
+        if col not in out.columns:
+            out[col] = pd.NA
+    out = out[UNIFIED_COLS].copy()
+
+    # Coerce key dtypes for consistency across sources.
+    for col in ["source", "case_id", "court_level", "court_name", "case_type", "act", "section"]:
+        out[col] = out[col].astype("string")
+    for col in ["adr_label", "odr_label", "adr_target", "odr_target", "final_label"]:
+        out[col] = pd.to_numeric(out[col], errors="coerce").astype("Int64")
+
     return out
+
+
+def validate_standardised(df: pd.DataFrame, source_name: str) -> None:
+    """Validate schema and critical constraints to catch silent bugs early."""
+    missing = [c for c in UNIFIED_COLS if c not in df.columns]
+    assert not missing, f"{source_name}: missing columns: {missing}"
+
+    label_allowed = {-1, 0, 1, 2}
+    for col in ["final_label"]:
+        vals = set(df[col].dropna().astype(int).unique().tolist())
+        assert vals.issubset(label_allowed), f"{source_name}: invalid {col} values: {sorted(vals - label_allowed)}"
+
+    bin_label_allowed = {-1, 0, 1}
+    for col in ["adr_label", "odr_label", "adr_target", "odr_target"]:
+        vals = set(df[col].dropna().astype(int).unique().tolist())
+        assert vals.issubset(bin_label_allowed), f"{source_name}: invalid {col} values: {sorted(vals - bin_label_allowed)}"
+
+    # case_id must be unique within each source.
+    dup_count = int(df.duplicated(subset=["source", "case_id"]).sum())
+    assert dup_count == 0, f"{source_name}: duplicate (source, case_id) rows: {dup_count}"
+
+    # Internal consistency checks between final multiclass and binary targets.
+    inconsistent_odr = df[(df["final_label"] == 2) & (df["odr_label"] != 1)]
+    assert inconsistent_odr.empty, f"{source_name}: final_label=2 requires odr_label=1"
+
+    inconsistent_adr = df[(df["final_label"] == 1) & (df["adr_label"] != 1)]
+    assert inconsistent_adr.empty, f"{source_name}: final_label=1 requires adr_label=1"
+
+    inconsistent_unknown = df[(df["final_label"] == -1) & ((df["adr_label"] != -1) | (df["odr_label"] != -1))]
+    assert inconsistent_unknown.empty, f"{source_name}: final_label=-1 requires adr_label=odr_label=-1"
 
 
 def main():
@@ -337,6 +408,7 @@ def main():
         ddl = pd.read_parquet(ddl_path)
         ddl_labeled = label_ddl(ddl)
         ddl_std = standardise(ddl_labeled, "District Court")
+        validate_standardised(ddl_std, "District Court")
         ddl_std.to_parquet(OUTPUT_DIR / "ddl_labeled.parquet", index=False)
         print(f"    Saved ddl_labeled.parquet ({len(ddl_std):,} rows)")
         all_labeled.append(ddl_std)
@@ -350,6 +422,7 @@ def main():
         hc = pd.read_parquet(hc_path)
         hc_labeled = label_court_text(hc, "High Court")
         hc_std = standardise(hc_labeled, "High Court")
+        validate_standardised(hc_std, "High Court")
         hc_std.to_parquet(OUTPUT_DIR / "hc_labeled.parquet", index=False)
         print(f"    Saved hc_labeled.parquet ({len(hc_std):,} rows)")
         all_labeled.append(hc_std)
@@ -363,6 +436,7 @@ def main():
         sc = pd.read_parquet(sc_path)
         sc_labeled = label_court_text(sc, "Supreme Court")
         sc_std = standardise(sc_labeled, "Supreme Court")
+        validate_standardised(sc_std, "Supreme Court")
         sc_std.to_parquet(OUTPUT_DIR / "sc_labeled.parquet", index=False)
         print(f"    Saved sc_labeled.parquet ({len(sc_std):,} rows)")
         all_labeled.append(sc_std)
@@ -373,6 +447,7 @@ def main():
     if all_labeled:
         print("\n[4] Combining all labeled data ...")
         combined = pd.concat(all_labeled, ignore_index=True)
+        validate_standardised(combined, "Combined")
 
         # Drop unknowns for training (or keep them for semi-supervised — your choice)
         known = combined[combined["final_label"] != -1].copy()
