@@ -173,7 +173,7 @@ After training the structured model (Step 7), proceed to:
 
 For detailed instructions on model training, see: `STEP_07_MODEL_TRAINING.md`
 
-#For RAG_MODEL
+# For RAG_MODEL
 Dataset — 750,442 court cases with ADR/ODR labels already tagged
 Filtered — kept 63,084 cases (all ADR positives + 25K negatives)
 Chunked — split texts into 100-word chunks for precise retrieval
