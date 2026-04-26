@@ -181,4 +181,4 @@ Embedded — used all-mpnet-base-v2 to convert text to 768-dim vectors
 FAISS index — stores all vectors for millisecond-speed search
 Smart retrieval — keyword boosting to separate criminal vs civil cases
 Generator — Flan-T5 generates answers from retrieved chunks
-Accuracy — 85% on 20-query test, targeting 95%+
+Accuracy — 85% on 20-query test, targeting 95%++ accuracy
