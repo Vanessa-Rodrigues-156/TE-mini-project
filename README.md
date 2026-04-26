@@ -174,11 +174,11 @@ After training the structured model (Step 7), proceed to:
 For detailed instructions on model training, see: `STEP_07_MODEL_TRAINING.md`
 
 # For RAG_MODEL
-Dataset — 750,442 court cases with ADR/ODR labels already tagged
-Filtered — kept 63,084 cases (all ADR positives + 25K negatives)
-Chunked — split texts into 100-word chunks for precise retrieval
-Embedded — used all-mpnet-base-v2 to convert text to 768-dim vectors
-FAISS index — stores all vectors for millisecond-speed search
-Smart retrieval — keyword boosting to separate criminal vs civil cases
-Generator — Flan-T5 generates answers from retrieved chunks
-Accuracy — 85% on 20-query test, targeting 95%++ accuracy
+1. Dataset — 750,442 court cases with ADR/ODR labels already tagged
+2. Filtered — kept 63,084 cases (all ADR positives + 25K negatives)
+3. Chunked — split texts into 100-word chunks for precise retrieval
+4. Embedded — used all-mpnet-base-v2 to convert text to 768-dim vectors
+5. FAISS index — stores all vectors for millisecond-speed search
+6. Smart retrieval — keyword boosting to separate criminal vs civil cases
+7. Generator — Flan-T5 generates answers from retrieved chunks
+8. Accuracy — 85% on 20-query test, targeting 95%++ accuracy
