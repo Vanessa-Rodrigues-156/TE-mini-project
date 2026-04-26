@@ -172,3 +172,13 @@ After training the structured model (Step 7), proceed to:
 3. **Deployment**: Create API for real-time predictions (Step 10)
 
 For detailed instructions on model training, see: `STEP_07_MODEL_TRAINING.md`
+
+#For RAG_MODEL
+Dataset — 750,442 court cases with ADR/ODR labels already tagged
+Filtered — kept 63,084 cases (all ADR positives + 25K negatives)
+Chunked — split texts into 100-word chunks for precise retrieval
+Embedded — used all-mpnet-base-v2 to convert text to 768-dim vectors
+FAISS index — stores all vectors for millisecond-speed search
+Smart retrieval — keyword boosting to separate criminal vs civil cases
+Generator — Flan-T5 generates answers from retrieved chunks
+Accuracy — 85% on 20-query test, targeting 95%+
