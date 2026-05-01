@@ -182,3 +182,14 @@ For detailed instructions on model training, see: `STEP_07_MODEL_TRAINING.md`
 6. Smart retrieval — keyword boosting to separate criminal vs civil cases
 7. Generator — Flan-T5 generates answers from retrieved chunks
 8. Accuracy — 85% on 20-query test, targeting 95%++ accuracy
+
+# For LEGALBERT_FINETUNE_MODEL
+1. Base model — `nlpaueb/legal-bert-base-uncased` (LegalBERT) as the pretrained checkpoint
+2. Dataset — used the labeled ADR/ODR dataset generated in this project (`compiled_dataset/training_data.parquet`)
+3. Filtered — kept only valid labeled rows (handled unknown label `-1` cases separately)
+4. Split — created train/validation split for reliable evaluation
+5. Tokenized — applied LegalBERT tokenizer with truncation/padding (max sequence length)
+6. Fine-tuned — trained a sequence classification head on top of LegalBERT (GPU recommended)
+7. Evaluated — measured performance on the validation split
+8. Accuracy — **99.1%**
+9. Notebook — `simple_legalbert.ipynb` (reference implementation)
